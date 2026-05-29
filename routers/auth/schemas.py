@@ -73,6 +73,8 @@ class UserWithTeamsResponse(UserSummaryResponse):
 class TeamCreateRequest(BaseModel):
   name: str
   scope_id: UUID | None = None
+  user_ids: List[str] = []
+  role_ids: List[UUID] = []
 
 
 class TeamUpdateRequest(BaseModel):

@@ -57,6 +57,18 @@ class SQLAlchemyUserContextRepository(UserContextRepository):
             return None
         return UserContextMapper.to_dict(user, include_teams=True)
 
+    async def get_by_ids(self, user_ids: List[str]) -> List[dict[str, Any]]:
+        if not user_ids:
+            return []
+
+        result = await self._session.execute(
+            select(UserContext)
+            .options(selectinload(UserContext.teams))
+            .where(UserContext.id.in_(user_ids))
+        )
+        users = result.scalars().all()
+        return [UserContextMapper.to_dict(user, include_teams=True) for user in users]
+
     async def create(
         self,
         user_id: str,

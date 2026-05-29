@@ -151,13 +151,15 @@ async def get_team_by_id(team_id: UUID, team_repo: TeamRepository = Depends(get_
     return await team.get_team_by_id(team_id, team_repo)
 
 
-@auth.post("/teams", response_model=TeamSummaryResponse)
+@auth.post("/teams", response_model=TeamDetailsResponse)
 async def create_team(
     request: TeamCreateRequest,
     team_repo: TeamRepository = Depends(get_repository(TeamRepository)),
     scope_repo: ScopeRepository = Depends(get_repository(ScopeRepository)),
+    user_repo: UserContextRepository = Depends(get_repository(UserContextRepository)),
+    role_repo: RoleRepository = Depends(get_repository(RoleRepository)),
 ):
-    return await team.create_team(request, team_repo, scope_repo)
+    return await team.create_team(request, team_repo, scope_repo, user_repo, role_repo)
 
 
 @auth.put("/teams/{team_id}", response_model=TeamSummaryResponse)

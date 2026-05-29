@@ -17,6 +17,10 @@ class RoleRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_by_ids(self, role_ids: list[UUID]) -> list[dict[str, Any]]:
+        pass
+
+    @abstractmethod
     async def create_role(self, name: str, description: str | None, action_names: list[str]) -> dict[str, Any]:
         pass
 

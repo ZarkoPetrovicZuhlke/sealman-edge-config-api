@@ -57,8 +57,9 @@ async def delete_scope(scope_id: UUID, scope_repo: ScopeRepository):
 
     teams = await scope_repo.list_teams(scope_id)
     if teams:
+        team_names = ", ".join(team["name"] for team in teams)
         raise APIError(
-            f"Scope is assigned to {len(teams)} team(s) and cannot be deleted",
+            f"Scope is assigned to {len(teams)} team(s) and cannot be deleted. Teams: {team_names}",
             409,
         )
 

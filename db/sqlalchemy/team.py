@@ -78,12 +78,40 @@ class SQLAlchemyTeamRepository(TeamRepository):
             return None
         return TeamMapper.to_details_dict(team)
 
-    async def create(self, name: str, scope_id: Optional[UUID] = None) -> dict[str, Any]:
+    async def create(
+        self,
+        name: str,
+        scope_id: Optional[UUID] = None,
+        user_ids: Optional[List[str]] = None,
+        role_ids: Optional[List[UUID]] = None,
+    ) -> dict[str, Any]:
         team = Team(name=name, scope_id=scope_id)
         self._session.add(team)
+
+        users: List[UserContext] = []
+        if user_ids:
+            user_result = await self._session.execute(
+                select(UserContext).where(UserContext.id.in_(user_ids))
+            )
+            users = list(user_result.scalars().all())
+
+        roles: List[Role] = []
+        if role_ids:
+            role_result = await self._session.execute(
+                select(Role).where(Role.id.in_(role_ids))
+            )
+            roles = list(role_result.scalars().all())
+
+        team.users.extend(users)
+        team.assigned_roles.extend(roles)
+
         await self._session.commit()
-        await self._session.refresh(team)
-        return TeamMapper.to_dict(team)
+
+        refreshed = await self._get_team_with_details(cast(UUID, team.id))
+        if refreshed is None:
+            await self._session.refresh(team)
+            return TeamMapper.to_dict(team)
+        return TeamMapper.to_details_dict(refreshed)
 
     async def update(
         self,

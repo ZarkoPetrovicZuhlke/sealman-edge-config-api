@@ -13,6 +13,10 @@ class UserContextRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_by_ids(self, user_ids: List[str]) -> List[dict[str, Any]]:
+        pass
+
+    @abstractmethod
     async def create(
         self,
         user_id: str,

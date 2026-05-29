@@ -18,7 +18,13 @@ class TeamRepository(ABC):
         pass
 
     @abstractmethod
-    async def create(self, name: str, scope_id: Optional[UUID] = None) -> dict[str, Any]:
+    async def create(
+        self,
+        name: str,
+        scope_id: Optional[UUID] = None,
+        user_ids: Optional[List[str]] = None,
+        role_ids: Optional[List[UUID]] = None,
+    ) -> dict[str, Any]:
         pass
 
     @abstractmethod

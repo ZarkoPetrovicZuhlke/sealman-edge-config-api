@@ -52,6 +52,18 @@ class SqlAlchemyRoleRepository(RoleRepository):
             return None
         return RoleMapper.to_dict(role)
 
+    async def get_by_ids(self, role_ids: list[UUID]) -> list[dict[str, Any]]:
+        if not role_ids:
+            return []
+
+        result = await self._session.execute(
+            select(Role)
+            .options(selectinload(Role.allowed_actions))
+            .where(Role.id.in_(role_ids))
+        )
+        roles = result.scalars().all()
+        return [RoleMapper.to_dict(role) for role in roles]
+
     async def list_roles(self) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(Role).options(selectinload(Role.allowed_actions)).order_by(Role.name)

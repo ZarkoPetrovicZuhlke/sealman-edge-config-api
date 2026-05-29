@@ -26,14 +26,47 @@ async def create_team(
     request: TeamCreateRequest,
     team_repo: TeamRepository,
     scope_repo: ScopeRepository,
+    user_repo: UserContextRepository,
+    role_repo: RoleRepository,
 ):
     if request.scope_id is not None:
         scope = await scope_repo.get(request.scope_id)
         if scope is None:
             raise APIError(f"Scope '{request.scope_id}' was not found", 404)
 
+    if len(request.user_ids) != len(set(request.user_ids)):
+        raise APIError("Duplicate user IDs in request", 400)
+
+    if len(request.role_ids) != len(set(request.role_ids)):
+        raise APIError("Duplicate role IDs in request", 400)
+
+    found_users = await user_repo.get_by_ids(request.user_ids)
+    found_user_ids = {user["id"] for user in found_users}
+    missing_user_ids = sorted(set(request.user_ids) - found_user_ids)
+    if missing_user_ids:
+        raise APIError(
+            f"Users not found: {', '.join(missing_user_ids)}",
+            404,
+        )
+
+    found_roles = await role_repo.get_by_ids(request.role_ids)
+    found_role_ids = {str(role["id"]) for role in found_roles}
+    missing_role_ids = sorted(
+        str(role_id) for role_id in request.role_ids if str(role_id) not in found_role_ids
+    )
+    if missing_role_ids:
+        raise APIError(
+            f"Roles not found: {', '.join(missing_role_ids)}",
+            404,
+        )
+
     try:
-        return await team_repo.create(name=request.name, scope_id=request.scope_id)
+        return await team_repo.create(
+            name=request.name,
+            scope_id=request.scope_id,
+            user_ids=request.user_ids,
+            role_ids=request.role_ids,
+        )
     except IntegrityError:
         raise APIError(f"Team with name '{request.name}' already exists", 409)
 
