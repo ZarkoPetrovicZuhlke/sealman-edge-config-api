@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from db.models.role import Role
 from db.models.team import Team
-from db.models.user_context import UserContext
+from db.models.user import User
 from db.registry import register_repository
 from db.repos.team import TeamRepository
 from db.sqlalchemy.role import RoleMapper
@@ -24,7 +24,7 @@ class TeamMapper:
         }
 
     @staticmethod
-    def user_to_dict(user: UserContext) -> dict[str, Any]:
+    def user_to_dict(user: User) -> dict[str, Any]:
         return {
             "id": cast(str, user.id),
             "preferred_username": cast(str, user.preferred_username),
@@ -88,10 +88,10 @@ class SQLAlchemyTeamRepository(TeamRepository):
         team = Team(name=name, scope_id=scope_id)
         self._session.add(team)
 
-        users: List[UserContext] = []
+        users: List[User] = []
         if user_ids:
             user_result = await self._session.execute(
-                select(UserContext).where(UserContext.id.in_(user_ids))
+                select(User).where(User.id.in_(user_ids))
             )
             users = list(user_result.scalars().all())
 
@@ -139,7 +139,7 @@ class SQLAlchemyTeamRepository(TeamRepository):
         if team is None:
             return None
 
-        user = await self._session.get(UserContext, user_id)
+        user = await self._session.get(User, user_id)
         if user is None:
             return None
 

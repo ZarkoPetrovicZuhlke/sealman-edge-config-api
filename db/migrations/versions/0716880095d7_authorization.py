@@ -1,8 +1,8 @@
-"""Add UserContext and authorization models
+"""Authorization
 
-Revision ID: 77a3266caf39
+Revision ID: 0716880095d7
 Revises: c3fd04c560ae
-Create Date: 2026-05-27
+Create Date: 2026-05-29
 
 """
 from typing import Sequence, Union
@@ -12,13 +12,10 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '77a3266caf39'
+revision: str = '0716880095d7'
 down_revision: Union[str, None] = 'c3fd04c560ae'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
-
-
-accessrule_enum = sa.Enum('ALL', 'ANY', name='accessrule')
 
 
 def upgrade() -> None:
@@ -40,11 +37,11 @@ def upgrade() -> None:
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('attr', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-    sa.Column('access_rule', accessrule_enum, nullable=False),
+    sa.Column('access_rule', sa.Enum('ALL', 'ANY', name='accessrule'), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
-    op.create_table('user_context',
+    op.create_table('user',
     sa.Column('id', sa.Text(), nullable=False),
     sa.Column('preferred_username', sa.Text(), nullable=False),
     sa.Column('is_admin', sa.Boolean(), nullable=False),
@@ -55,7 +52,7 @@ def upgrade() -> None:
     sa.Column('role_id', sa.UUID(), nullable=False),
     sa.Column('action_name', sa.String(), nullable=False),
     sa.ForeignKeyConstraint(['action_name'], ['actions.name'], ),
-    sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ),
+    sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('role_id', 'action_name')
     )
     op.create_table('teams',
@@ -69,26 +66,37 @@ def upgrade() -> None:
     op.create_table('team_assigned_roles',
     sa.Column('team_id', sa.UUID(), nullable=False),
     sa.Column('role_id', sa.UUID(), nullable=False),
-    sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ),
-    sa.ForeignKeyConstraint(['team_id'], ['teams.id'], ),
+    sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['team_id'], ['teams.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('team_id', 'role_id')
     )
-    op.create_table('user_context_teams',
-    sa.Column('user_id', sa.Text(), nullable=False),
+    op.create_table('team_assigned_users',
+    sa.Column('user_id', sa.String(), nullable=False),
     sa.Column('team_id', sa.UUID(), nullable=False),
     sa.ForeignKeyConstraint(['team_id'], ['teams.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['user_context.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
     sa.PrimaryKeyConstraint('user_id', 'team_id')
     )
+    op.alter_column('active_deployment', 'updated_at',
+               existing_type=postgresql.TIMESTAMP(timezone=True),
+               nullable=True,
+               existing_server_default=sa.text('now()'))
+    op.drop_constraint(op.f('password_renewal_tasks_device_id_fkey'), 'password_renewal_tasks', type_='foreignkey')
+    op.create_foreign_key('password_renewal_tasks_device_id_fkey', 'password_renewal_tasks', 'devices', ['device_id'], ['device_id'])
 
 
 def downgrade() -> None:
-    op.drop_table('user_context_teams')
+    op.drop_constraint('password_renewal_tasks_device_id_fkey', 'password_renewal_tasks', type_='foreignkey')
+    op.create_foreign_key(op.f('password_renewal_tasks_device_id_fkey'), 'password_renewal_tasks', 'devices', ['device_id'], ['device_id'], ondelete='CASCADE')
+    op.alter_column('active_deployment', 'updated_at',
+               existing_type=postgresql.TIMESTAMP(timezone=True),
+               nullable=False,
+               existing_server_default=sa.text('now()'))
+    op.drop_table('team_assigned_users')
     op.drop_table('team_assigned_roles')
     op.drop_table('teams')
     op.drop_table('role_actions')
-    op.drop_table('user_context')
+    op.drop_table('user')
     op.drop_table('scopes')
     op.drop_table('roles')
     op.drop_table('actions')
-    op.execute(sa.text('DROP TYPE IF EXISTS accessrule'))

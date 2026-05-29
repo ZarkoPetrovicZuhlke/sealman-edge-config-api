@@ -8,7 +8,7 @@ from constants import AUTHORIZATION_API_PLATFORM_NAME
 from db.repos.action import ActionRepository
 from db.repos.scope import ScopeRepository
 from db.repos.team import TeamRepository
-from db.repos.user_context import UserContextRepository
+from db.repos.user import UserRepository
 from exceptions import UserNotFound
 from routers.auth.routes import action, role, scope, team
 from db.repos.role import RoleRepository
@@ -156,7 +156,7 @@ async def create_team(
     request: TeamCreateRequest,
     team_repo: TeamRepository = Depends(get_repository(TeamRepository)),
     scope_repo: ScopeRepository = Depends(get_repository(ScopeRepository)),
-    user_repo: UserContextRepository = Depends(get_repository(UserContextRepository)),
+    user_repo: UserRepository = Depends(get_repository(UserRepository)),
     role_repo: RoleRepository = Depends(get_repository(RoleRepository)),
 ):
     return await team.create_team(request, team_repo, scope_repo, user_repo, role_repo)
@@ -177,7 +177,7 @@ async def add_user_to_team(
     team_id: UUID,
     request: TeamAddUserRequest,
     team_repo: TeamRepository = Depends(get_repository(TeamRepository)),
-    user_repo: UserContextRepository = Depends(get_repository(UserContextRepository)),
+    user_repo: UserRepository = Depends(get_repository(UserRepository)),
 ):
     return await team.add_user_to_team(team_id, request, team_repo, user_repo)
 
@@ -221,7 +221,7 @@ async def delete_team(
 @auth.get("/users", response_model=UserListResponse)
 async def get_users(
     is_new_user: bool | None = Query(default=None),
-    user_repo: UserContextRepository = Depends(get_repository(UserContextRepository)),
+    user_repo: UserRepository = Depends(get_repository(UserRepository)),
 ):
     return await user_repo.list(is_new_user=is_new_user)
 

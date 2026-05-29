@@ -1,19 +1,19 @@
 """seed_actions
 
-Revision ID: b4df9f3527d5
-Revises: 77a3266caf39
-Create Date: 2026-05-27
+Revision ID: 8d4d5d5c121e
+Revises: 0716880095d7
+Create Date: 2026-05-29
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+
 
 # revision identifiers, used by Alembic.
-revision: str = 'b4df9f3527d5'
-down_revision: Union[str, None] = '77a3266caf39'
+revision: str = '8d4d5d5c121e'
+down_revision: Union[str, None] = '0716880095d7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

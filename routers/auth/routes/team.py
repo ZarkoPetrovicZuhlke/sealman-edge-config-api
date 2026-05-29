@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from db.repos.role import RoleRepository
 from db.repos.scope import ScopeRepository
 from db.repos.team import TeamRepository
-from db.repos.user_context import UserContextRepository
+from db.repos.user import UserRepository
 from exceptions import APIError
 from routers.auth.schemas import TeamAddRoleRequest, TeamAddUserRequest, TeamCreateRequest, TeamUpdateRequest
 
@@ -26,7 +26,7 @@ async def create_team(
     request: TeamCreateRequest,
     team_repo: TeamRepository,
     scope_repo: ScopeRepository,
-    user_repo: UserContextRepository,
+    user_repo: UserRepository,
     role_repo: RoleRepository,
 ):
     if request.scope_id is not None:
@@ -104,7 +104,7 @@ async def add_user_to_team(
     team_id: UUID,
     request: TeamAddUserRequest,
     team_repo: TeamRepository,
-    user_repo: UserContextRepository,
+    user_repo: UserRepository,
 ):
     team = await team_repo.get_with_details(team_id)
     if team is None:

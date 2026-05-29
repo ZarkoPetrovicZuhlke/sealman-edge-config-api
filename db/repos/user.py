@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, List, Optional
 
 
-class UserContextRepository(ABC):
+class UserRepository(ABC):
 
     @abstractmethod
     async def list(self, is_new_user: Optional[bool] = None) -> List[dict[str, Any]]:

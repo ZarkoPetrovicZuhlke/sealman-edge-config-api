@@ -15,6 +15,14 @@ team_assigned_roles = Table(
 )
 
 
+team_assigned_users = Table(
+    "team_assigned_users",
+    Base.metadata,
+    Column("user_id", String, ForeignKey("user.id"), primary_key=True),
+    Column("team_id", UUID(as_uuid=True), ForeignKey("teams.id"), primary_key=True),
+)
+
+
 class Team(Base):
     __tablename__ = "teams"
 
@@ -24,4 +32,4 @@ class Team(Base):
 
     scope = relationship("Scope")
     assigned_roles = relationship("Role", secondary=team_assigned_roles, passive_deletes=True)
-    users = relationship("UserContext", secondary="user_context_teams", back_populates="teams")
+    users = relationship("User", secondary="team_assigned_users", back_populates="teams")
