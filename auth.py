@@ -18,6 +18,8 @@ from constants import (
 )
 from fastapi import Depends, HTTPException, status, Security
 from fastapi.security import OAuth2AuthorizationCodeBearer
+from db.repos.user import UserRepository
+from db.session import get_repository
 from exceptions import InsufficientPermissions, InvalidUserRole
 from helper import AuditTrail
 
@@ -216,8 +218,53 @@ def get_current_user(auth_context: dict) -> str:
     Extracts a user identifier from the auth context for logging/audit purposes.
     Tries multiple claims to be compatible with different providers and configurations.
     """
-    return auth_context.get("name") or auth_context.get("preferred_username") or auth_context.get(
-        "email") or auth_context.get("oid") or auth_context.get("sub")
+    user = (
+        auth_context.get("name")
+        or auth_context.get("preferred_username")
+        or auth_context.get("email")
+        or auth_context.get("oid")
+        or auth_context.get("sub")
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="token does not contain a recognizable user identity claim",
+        )
+    return user
+
+
+async def ensure_user_exists(
+    auth_context: dict = Depends(validate_jwt),
+    user_repo: UserRepository = Depends(get_repository(UserRepository)),
+) -> dict:
+    """
+    Provisions a new user row on first access.
+    Uses INSERT ... ON CONFLICT (id) DO NOTHING so existing users are never modified.
+    """
+    user_oid = auth_context.get("oid") or auth_context.get("sub")
+    if not user_oid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="token is missing user identifier (oid/sub)",
+        )
+    preferred_username = (
+        auth_context.get("preferred_username")
+        or auth_context.get("email")
+        or auth_context.get("name")
+        or user_oid
+    )
+    await user_repo.ensure_exists(user_oid, preferred_username)
+    return auth_context
+
+
+async def get_user_with_provisioning(
+    auth_context: dict = Depends(ensure_user_exists),
+) -> dict:
+    """
+    Dependency chain: decode_jwt → ensure_user_exists → return auth_context.
+    Use this instead of validate_jwt when automatic user provisioning is desired.
+    """
+    return auth_context
 
 
 class RBACPermissionChecker:

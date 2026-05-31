@@ -41,5 +41,13 @@ class UserRepository(ABC):
         pass
 
     @abstractmethod
+    async def ensure_exists(
+        self,
+        user_id: str,
+        preferred_username: str,
+    ) -> None:
+        pass
+
+    @abstractmethod
     async def list_teams(self, user_id: str) -> List[dict[str, Any]]:
         pass

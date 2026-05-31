@@ -1,6 +1,7 @@
 from typing import Any, List, Optional, cast
 
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -110,6 +111,19 @@ class SQLAlchemyUserRepository(UserRepository):
         result = await self._session.execute(delete(User).where(User.id == user_id))
         await self._session.commit()
         return bool(getattr(result, "rowcount", 0))
+
+    async def ensure_exists(
+        self,
+        user_id: str,
+        preferred_username: str,
+    ) -> None:
+        stmt = (
+            pg_insert(User)
+            .values(id=user_id, preferred_username=preferred_username, is_admin=False, is_new=True)
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+        await self._session.execute(stmt)
+        await self._session.commit()
 
     async def list_teams(self, user_id: str) -> List[dict[str, Any]]:
         user = await self._get_user_with_teams(user_id)
