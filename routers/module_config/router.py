@@ -66,11 +66,11 @@ async def get_module_twin_config(device: str, module: str,
 @module_config.get("/{device}/twin/config/{module}/binary", response_model=GetModuleTwinBinaryResponse,
                    tags=["Module Configuration"])
 async def get_module_twin_config_binary(device: str, module: str,
-                                        _ = Depends(PathParamPermissionCheck(Device.READ_MODULE_TWIN_CONFIG, Resource.DEVICE, "device"))):
+                                        _ = Depends(PathParamPermissionCheck(Device.READ, Resource.DEVICE, "device"))):
     return await _get_module_twin_config_binary(device, module)
 
 @module_config.get("/{device}/twin/identity/{module}/reported", response_model=GetModuleTwinIdentityResponse,
                    tags=["Module Configuration"])
 async def get_module_twin_identity_reported(device: str, module: str,
-                                 _ = Depends(PathParamPermissionCheck(Device.READ_MODULE_TWIN_CONFIG, Resource.DEVICE, "device"))):
+                                 _ = Depends(PathParamPermissionCheck(Device.READ, Resource.DEVICE, "device"))):
     return await _get_module_twin_identity_reported(device, module)
