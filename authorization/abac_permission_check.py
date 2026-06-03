@@ -126,3 +126,82 @@ class ABACPermissionCheck:
             "permission": self.permission,
             "device_id": device_id,
         }
+
+
+class ABACDeviceListFilter:
+    """
+    ABAC dependency for list endpoints that returns a filter function
+    instead of checking a single device. The filter evaluates each device's
+    raw metadata against the user's team scopes.
+
+    Returns a dict with:
+      - "user_name", "user_id", "permission"
+      - "is_unrestricted": True if no scope filtering is needed
+      - "filter_device": callable (device_meta: dict) -> bool
+    """
+
+    def __init__(self, permission: str):
+        self.permission = permission
+
+    async def __call__(
+        self,
+        auth_context: dict = Depends(validate_jwt),
+        user_repo: UserRepository = Depends(get_repository(UserRepository)),
+    ) -> dict:
+        user_id = auth_context.get("oid") or auth_context.get("sub")
+        user_name = get_current_user(auth_context)
+
+        if not user_id:
+            raise InsufficientPermissions("User identifier missing from token", status_code=403)
+
+        user_data = await user_repo.get_teams_with_roles_and_scopes(user_id)
+
+        if user_data is None:
+            raise InsufficientPermissions("User not found", status_code=403)
+
+        # Admin bypass — unrestricted access
+        if user_data.get("is_admin"):
+            return self._build_result(user_name, user_id, is_unrestricted=True, scopes=[])
+
+        teams = user_data.get("teams", [])
+        if not teams:
+            raise InsufficientPermissions("User has no team assignments", status_code=403)
+
+        teams_with_permission = [
+            team for team in teams
+            if any(
+                self.permission in role.get("allowed_actions", [])
+                for role in team.get("roles", [])
+            )
+        ]
+
+        if not teams_with_permission:
+            raise InsufficientPermissions(
+                f"No role grants permission '{self.permission}'", status_code=403
+            )
+
+        # If any team has no scope → unrestricted
+        if any(team.get("scope") is None for team in teams_with_permission):
+            return self._build_result(user_name, user_id, is_unrestricted=True, scopes=[])
+
+        scopes = [team["scope"] for team in teams_with_permission]
+        return self._build_result(user_name, user_id, is_unrestricted=False, scopes=scopes)
+
+    def _build_result(
+        self, user_name: str, user_id: str, is_unrestricted: bool, scopes: List[Dict[str, Any]]
+    ) -> dict:
+        def filter_device(device_meta: Dict[str, Any]) -> bool:
+            if is_unrestricted:
+                return True
+            return any(
+                _matches_scope(scope["attr"], scope["access_rule"], device_meta)
+                for scope in scopes
+            )
+
+        return {
+            "user_name": user_name,
+            "user_id": user_id,
+            "permission": self.permission,
+            "is_unrestricted": is_unrestricted,
+            "filter_device": filter_device,
+        }

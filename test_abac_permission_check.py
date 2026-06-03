@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from authorization.abac_permission_check import ABACPermissionCheck, _matches_scope
+from authorization.abac_permission_check import ABACPermissionCheck, ABACDeviceListFilter, _matches_scope
 from exceptions import InsufficientPermissions
 
 
@@ -386,3 +386,142 @@ class TestABACPermissionCheck:
 
         result = await checker(request, auth_context, user_repo, device_repo)
         assert result["device_id"] == "my-device"
+
+
+# =============================================================================
+# Tests for ABACDeviceListFilter
+# =============================================================================
+
+
+class TestABACDeviceListFilter:
+    """Unit tests for the ABACDeviceListFilter callable."""
+
+    def _make_user_data(self, is_admin=False, teams=None):
+        return {
+            "id": "user-oid-123",
+            "is_admin": is_admin,
+            "teams": teams or [],
+        }
+
+    def _make_team(self, actions, scope=None):
+        return {
+            "id": "team-1",
+            "name": "Team A",
+            "scope": scope,
+            "roles": [
+                {
+                    "id": "role-1",
+                    "name": "Editor",
+                    "allowed_actions": actions,
+                }
+            ],
+        }
+
+    @pytest.fixture
+    def user_repo(self):
+        return AsyncMock()
+
+    @pytest.fixture
+    def auth_context(self):
+        return {
+            "oid": "user-oid-123",
+            "sub": "user-sub-123",
+            "name": "Test User",
+            "roles": ["user.editor"],
+        }
+
+    @pytest.mark.asyncio
+    async def test_admin_returns_unrestricted(self, user_repo, auth_context):
+        checker = ABACDeviceListFilter("device.read")
+        user_repo.get_teams_with_roles_and_scopes.return_value = self._make_user_data(is_admin=True)
+
+        result = await checker(auth_context, user_repo)
+
+        assert result["is_unrestricted"] is True
+        assert result["filter_device"]({"countryCode": "anything"}) is True
+
+    @pytest.mark.asyncio
+    async def test_user_not_found_raises_403(self, user_repo, auth_context):
+        checker = ABACDeviceListFilter("device.read")
+        user_repo.get_teams_with_roles_and_scopes.return_value = None
+
+        with pytest.raises(InsufficientPermissions) as exc_info:
+            await checker(auth_context, user_repo)
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_no_teams_raises_403(self, user_repo, auth_context):
+        checker = ABACDeviceListFilter("device.read")
+        user_repo.get_teams_with_roles_and_scopes.return_value = self._make_user_data(teams=[])
+
+        with pytest.raises(InsufficientPermissions) as exc_info:
+            await checker(auth_context, user_repo)
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_no_permission_raises_403(self, user_repo, auth_context):
+        checker = ABACDeviceListFilter("device.read")
+        team = self._make_team(actions=["device.deployment.write"])
+        user_repo.get_teams_with_roles_and_scopes.return_value = self._make_user_data(teams=[team])
+
+        with pytest.raises(InsufficientPermissions) as exc_info:
+            await checker(auth_context, user_repo)
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_no_scope_means_unrestricted(self, user_repo, auth_context):
+        checker = ABACDeviceListFilter("device.read")
+        team = self._make_team(actions=["device.read"], scope=None)
+        user_repo.get_teams_with_roles_and_scopes.return_value = self._make_user_data(teams=[team])
+
+        result = await checker(auth_context, user_repo)
+
+        assert result["is_unrestricted"] is True
+        assert result["filter_device"]({"anything": "value"}) is True
+
+    @pytest.mark.asyncio
+    async def test_scope_filter_matches(self, user_repo, auth_context):
+        checker = ABACDeviceListFilter("device.read")
+        scope = {"attr": {"countryCode": "DEU"}, "access_rule": "ALL"}
+        team = self._make_team(actions=["device.read"], scope=scope)
+        user_repo.get_teams_with_roles_and_scopes.return_value = self._make_user_data(teams=[team])
+
+        result = await checker(auth_context, user_repo)
+
+        assert result["is_unrestricted"] is False
+        assert result["filter_device"]({"countryCode": "DEU"}) is True
+        assert result["filter_device"]({"countryCode": "USA"}) is False
+
+    @pytest.mark.asyncio
+    async def test_multiple_scopes_any_match_passes(self, user_repo, auth_context):
+        checker = ABACDeviceListFilter("device.read")
+        team1 = self._make_team(
+            actions=["device.read"],
+            scope={"attr": {"countryCode": "DEU"}, "access_rule": "ALL"},
+        )
+        team2 = self._make_team(
+            actions=["device.read"],
+            scope={"attr": {"countryCode": "RS"}, "access_rule": "ALL"},
+        )
+        user_repo.get_teams_with_roles_and_scopes.return_value = self._make_user_data(
+            teams=[team1, team2]
+        )
+
+        result = await checker(auth_context, user_repo)
+
+        assert result["filter_device"]({"countryCode": "DEU"}) is True
+        assert result["filter_device"]({"countryCode": "RS"}) is True
+        assert result["filter_device"]({"countryCode": "USA"}) is False
+
+    @pytest.mark.asyncio
+    async def test_filter_with_list_scope_value(self, user_repo, auth_context):
+        checker = ABACDeviceListFilter("device.read")
+        scope = {"attr": {"countryCode": ["DEU", "RS"]}, "access_rule": "ALL"}
+        team = self._make_team(actions=["device.read"], scope=scope)
+        user_repo.get_teams_with_roles_and_scopes.return_value = self._make_user_data(teams=[team])
+
+        result = await checker(auth_context, user_repo)
+
+        assert result["filter_device"]({"countryCode": "DEU"}) is True
+        assert result["filter_device"]({"countryCode": "RS"}) is True
+        assert result["filter_device"]({"countryCode": "USA"}) is False
