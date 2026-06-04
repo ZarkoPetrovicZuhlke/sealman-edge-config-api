@@ -1,6 +1,6 @@
 from fastapi import Depends, Request
 from routers.base_api_router import BaseAPIRouter
-from authorization.abac_permission_check import ABACDeviceListFilter
+from authorization.abac_permission_check import ABACDeviceListFilter, ABACDeviceListFilterResult
 from authorization.permission_types import Device
 from db.repos.device import DeviceRepository
 from db.session import get_repository
@@ -14,7 +14,7 @@ devices = BaseAPIRouter(prefix="/devices", tags=["Devices"])
 @devices.get("")
 async def get_devices_route(
     request: Request,
-    abac_context=Depends(ABACDeviceListFilter(Device.READ)),
+    abac_context: ABACDeviceListFilterResult = Depends(ABACDeviceListFilter(Device.READ)),
     repo: DeviceRepository = Depends(get_repository(DeviceRepository)),
 ):
     return await get_devices(

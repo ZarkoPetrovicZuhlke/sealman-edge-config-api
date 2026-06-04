@@ -1,6 +1,6 @@
 from fastapi import Depends, Request
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TypedDict
 
 from auth import get_current_user, validate_jwt
 from db.repos.device import DeviceRepository
@@ -10,6 +10,21 @@ from exceptions import InsufficientPermissions
 
 
 logger = logging.getLogger("EdgeConfigAPI")
+
+
+class ABACBaseResult(TypedDict):
+    user_id: str
+    user_name: str
+    permission: str
+
+
+class ABACPermissionCheckResult(ABACBaseResult):
+    device_id: Optional[str]
+
+
+class ABACDeviceListFilterResult(ABACBaseResult):
+    is_unrestricted: bool
+    filter_device: Callable[[Dict[str, Any]], bool]
 
 
 def _key_matches(key: str, scope_value: Any, device_meta: Dict[str, Any]) -> bool:
@@ -52,7 +67,7 @@ class ABACPermissionCheck:
         auth_context: dict = Depends(validate_jwt),
         user_repo: UserRepository = Depends(get_repository(UserRepository)),
         device_repo: DeviceRepository = Depends(get_repository(DeviceRepository)),
-    ) -> dict:
+    ) -> ABACPermissionCheckResult:
         device_id = request.path_params.get(self.device_path) if self.device_path else None
         user_id = auth_context.get("oid") or auth_context.get("sub")
         user_name = get_current_user(auth_context)
@@ -119,7 +134,9 @@ class ABACPermissionCheck:
             "Device is not within any assigned scope", status_code=403
         )
 
-    def _build_result(self, user_name: str, user_id: Optional[str], device_id: Optional[str]) -> dict:
+    def _build_result(
+        self, user_name: str, user_id: str, device_id: Optional[str]
+    ) -> ABACPermissionCheckResult:
         return {
             "user_name": user_name,
             "user_id": user_id,
@@ -147,7 +164,7 @@ class ABACDeviceListFilter:
         self,
         auth_context: dict = Depends(validate_jwt),
         user_repo: UserRepository = Depends(get_repository(UserRepository)),
-    ) -> dict:
+    ) -> ABACDeviceListFilterResult:
         user_id = auth_context.get("oid") or auth_context.get("sub")
         user_name = get_current_user(auth_context)
 
@@ -189,7 +206,7 @@ class ABACDeviceListFilter:
 
     def _build_result(
         self, user_name: str, user_id: str, is_unrestricted: bool, scopes: List[Dict[str, Any]]
-    ) -> dict:
+    ) -> ABACDeviceListFilterResult:
         def filter_device(device_meta: Dict[str, Any]) -> bool:
             if is_unrestricted:
                 return True

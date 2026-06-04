@@ -1,12 +1,12 @@
 from typing import Any, List, Optional, cast
 from uuid import UUID
 
-from sqlalchemy import select, delete as sa_delete
+from sqlalchemy import insert, select, delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from db.models.role import Role
-from db.models.team import Team
+from db.models.team import Team, team_assigned_roles, team_assigned_users
 from db.models.user import User
 from db.registry import register_repository
 from db.repos.team import TeamRepository
@@ -52,6 +52,7 @@ class SQLAlchemyTeamRepository(TeamRepository):
     async def _get_team_with_details(self, team_id: UUID) -> Optional[Team]:
         result = await self._session.execute(
             select(Team)
+            .execution_options(populate_existing=True)
             .options(
                 selectinload(Team.scope),
                 selectinload(Team.users),
@@ -88,26 +89,24 @@ class SQLAlchemyTeamRepository(TeamRepository):
         team = Team(name=name, scope_id=scope_id)
         self._session.add(team)
 
-        users: List[User] = []
+        await self._session.flush()
+        team_id = cast(UUID, team.id)
+
         if user_ids:
-            user_result = await self._session.execute(
-                select(User).where(User.id.in_(user_ids))
+            await self._session.execute(
+                insert(team_assigned_users),
+                [{"team_id": team_id, "user_id": user_id} for user_id in user_ids],
             )
-            users = list(user_result.scalars().all())
 
-        roles: List[Role] = []
         if role_ids:
-            role_result = await self._session.execute(
-                select(Role).where(Role.id.in_(role_ids))
+            await self._session.execute(
+                insert(team_assigned_roles),
+                [{"team_id": team_id, "role_id": role_id} for role_id in role_ids],
             )
-            roles = list(role_result.scalars().all())
-
-        team.users.extend(users)
-        team.assigned_roles.extend(roles)
 
         await self._session.commit()
 
-        refreshed = await self._get_team_with_details(cast(UUID, team.id))
+        refreshed = await self._get_team_with_details(team_id)
         if refreshed is None:
             await self._session.refresh(team)
             return TeamMapper.to_dict(team)
