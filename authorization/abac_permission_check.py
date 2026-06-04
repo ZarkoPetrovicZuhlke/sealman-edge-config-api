@@ -56,6 +56,57 @@ def _matches_scope(scope_attr: Dict[str, Any], access_rule: str, device_meta: Di
         return any(_key_matches(k, v, device_meta) for k, v in scope_attr.items())
 
 
+def evaluate_permission(
+    permission: str,
+    user_data: dict,
+    device_meta: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """
+    Evaluates whether a user has the given permission.
+
+    Pure function operating on pre-fetched data. Use it directly from request
+    handlers to check multiple permissions without instantiating ABACPermissionCheck
+    or catching exceptions.
+
+    Args:
+        permission: The permission string to evaluate.
+        user_data: Result of UserRepository.get_teams_with_roles_and_scopes().
+        device_meta: Device metadata for scope evaluation. Pass None to skip
+                     scope filtering (e.g. for platform-level permission checks).
+
+    Returns:
+        True if the user has the permission, False otherwise.
+    """
+    if user_data.get("is_admin"):
+        return True
+
+    teams = user_data.get("teams", [])
+    teams_with_permission = [
+        team for team in teams
+        if any(
+            permission in role.get("allowed_actions", [])
+            for role in team.get("roles", [])
+        )
+    ]
+
+    if not teams_with_permission:
+        return False
+
+    # No device metadata provided — skip scope filtering
+    if device_meta is None:
+        return True
+
+    # Unrestricted if any relevant team has no scope constraint
+    if any(team.get("scope") is None for team in teams_with_permission):
+        return True
+
+    # Evaluate scope constraints against device metadata
+    return any(
+        _matches_scope(team["scope"]["attr"], team["scope"]["access_rule"], device_meta)
+        for team in teams_with_permission
+    )
+
+
 class ABACPermissionCheck:
     def __init__(self, permission: str, device_path: str = "device"):
         self.permission = permission
@@ -77,62 +128,43 @@ class ABACPermissionCheck:
         if not user_id:
             raise InsufficientPermissions("User identifier missing from token", status_code=403)
 
-        # Fetch user with teams, roles, and scopes
         user_data = await user_repo.get_teams_with_roles_and_scopes(user_id)
-
         if user_data is None:
             raise InsufficientPermissions("User not found", status_code=403)
 
-        # Admin bypass
-        if user_data.get("is_admin"):
-            return self._build_result(user_name, user_id, device_id)
+        device_meta = None
 
-        teams = user_data.get("teams", [])
-        if not teams:
+        if not user_data.get("is_admin"):
+            teams = user_data.get("teams", [])
+            if not teams:
+                raise InsufficientPermissions("User has no team assignments", status_code=403)
+
+            teams_with_permission = [
+                team for team in teams
+                if any(
+                    self.permission in role.get("allowed_actions", [])
+                    for role in team.get("roles", [])
+                )
+            ]
+            if not teams_with_permission:
+                raise InsufficientPermissions(
+                    f"No role grants permission '{self.permission}'", status_code=403
+                )
+
+            # Fetch device metadata only when scope filtering is required
+            if device_id is not None and not any(team.get("scope") is None for team in teams_with_permission):
+                device_meta = await device_repo.get_device_meta_raw(device_id)
+                if device_meta is None:
+                    raise InsufficientPermissions(
+                        f"Device '{device_id}' not found", status_code=403
+                    )
+
+        if not evaluate_permission(self.permission, user_data, device_meta):
             raise InsufficientPermissions(
-                "User has no team assignments", status_code=403
+                "Device is not within any assigned scope", status_code=403
             )
 
-        # Find teams where at least one role has the required permission
-        teams_with_permission = [
-            team for team in teams
-            if any(
-                self.permission in role.get("allowed_actions", [])
-                for role in team.get("roles", [])
-            )
-        ]
-
-        if not teams_with_permission:
-            raise InsufficientPermissions(
-                f"No role grants permission '{self.permission}'", status_code=403
-            )
-
-        # If no device_id — permission is granted (no scope filtering needed)
-        if device_id is None:
-            return self._build_result(user_name, user_id, device_id)
-
-        # Device-level scope check
-        # If any team with permission has no scope → unrestricted access
-        if any(team.get("scope") is None for team in teams_with_permission):
-            return self._build_result(user_name, user_id, device_id)
-
-        # Fetch raw device metadata for scope evaluation
-        device_meta = await device_repo.get_device_meta_raw(device_id)
-
-        if device_meta is None:
-            raise InsufficientPermissions(
-                f"Device '{device_id}' not found", status_code=403
-            )
-
-        # Evaluate each team's scope against device metadata
-        for team in teams_with_permission:
-            scope = team["scope"]
-            if _matches_scope(scope["attr"], scope["access_rule"], device_meta):
-                return self._build_result(user_name, user_id, device_id)
-
-        raise InsufficientPermissions(
-            "Device is not within any assigned scope", status_code=403
-        )
+        return self._build_result(user_name, user_id, device_id)
 
     def _build_result(
         self, user_name: str, user_id: str, device_id: Optional[str]

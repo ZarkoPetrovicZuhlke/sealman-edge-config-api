@@ -5,8 +5,6 @@ from pydantic import BaseModel, RootModel
 
 
 class UserPermissions(BaseModel):
-  ResourceType: str
-  ResourceId: str
   Permissions: List[str] = []
 
 

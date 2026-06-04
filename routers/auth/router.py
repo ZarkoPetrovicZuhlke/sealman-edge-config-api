@@ -3,11 +3,11 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, Query
 
-from auth import RBACPermissionChecker, validate_jwt
-from authorization.abac_permission_check import ABACPermissionCheck
+from auth import validate_jwt
+from authorization.abac_permission_check import ABACPermissionCheck, evaluate_permission
 from authorization.permission_types import Device, Platform
-from constants import AUTHORIZATION_API_PLATFORM_NAME
 from db.repos.action import ActionRepository
+from db.repos.device import DeviceRepository
 from db.repos.scope import ScopeRepository
 from db.repos.team import TeamRepository
 from db.repos.user import UserRepository
@@ -103,52 +103,6 @@ async def delete_role(
     role_repo: RoleRepository = Depends(get_repository(RoleRepository)),
 ):
     return await role.delete_role(role_id, role_repo)
-
-
-@auth.get("/permissions/{resource_type}", response_model=UserPermissions)
-async def get_permissions(
-    resource_type: str,
-    resource_id: str | None = None,
-    _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_READ)),
-    auth_context: dict = Depends(validate_jwt),
-):
-
-    if resource_type == "platform" and resource_id is None:
-        resource_id = AUTHORIZATION_API_PLATFORM_NAME
-
-    if resource_id is None:
-        raise HTTPException(status_code=400, detail="resource_id is required")
-
-    user_id = auth_context.get("oid") or auth_context.get("sub")
-    if user_id is None:
-        raise UserNotFound(status_code=403)
-
-    # In RBAC mode, derive permissions from the user's assigned roles.
-    if resource_type.lower() == "platform":
-        permission_resource_type = Platform
-    elif resource_type.lower() == "device":
-        permission_resource_type = Device
-    else:
-        raise HTTPException(status_code=400, detail="Invalid resource type")
-
-    assigned_permissions = RBACPermissionChecker.get_assigned_permissions(auth_context)
-    assigned_permission_map = {perm: True for perm in assigned_permissions}
-    available_permissions = {
-        value
-        for attr in dir(permission_resource_type)
-        if not attr.startswith("__")
-        for value in [getattr(permission_resource_type, attr)]
-        if isinstance(value, str)
-    }
-    user_permissions = [
-        permission for permission in available_permissions if permission in assigned_permission_map
-    ]
-
-    return UserPermissions(
-        ResourceType=resource_type,
-        ResourceId=resource_id,
-        Permissions=user_permissions,
-    )
 
 
 @auth.get("/teams", response_model=TeamListResponse)
@@ -280,4 +234,57 @@ async def delete_scope(
 ):
     return await scope.delete_scope(scope_id, scope_repo)
 
+
+@auth.get("/permissions/platform", response_model=UserPermissions)
+async def get_platform_permissions(
+    auth_context: dict = Depends(validate_jwt),
+    user_repo: UserRepository = Depends(get_repository(UserRepository)),
+):
+    user_id = auth_context.get("oid") or auth_context.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=403, detail="User identifier missing from token")
+
+    user_data = await user_repo.get_teams_with_roles_and_scopes(user_id)
+    if user_data is None:
+        raise HTTPException(status_code=403, detail="User not found")
+
+    permissions = [
+        permission
+        for permission in Platform.ReadPermissions + Platform.EditPermissions
+        if evaluate_permission(permission, user_data)
+    ]
+
+    return UserPermissions(
+        Permissions=permissions,
+    )
+
+
+@auth.get("/permissions/device", response_model=UserPermissions)
+async def get_device_permissions(
+    device_id: str,
+    auth_context: dict = Depends(validate_jwt),
+    user_repo: UserRepository = Depends(get_repository(UserRepository)),
+    device_repo: DeviceRepository = Depends(get_repository(DeviceRepository)),
+):
+    user_id = auth_context.get("oid") or auth_context.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=403, detail="User identifier missing from token")
+
+    user_data = await user_repo.get_teams_with_roles_and_scopes(user_id)
+    if user_data is None:
+        raise HTTPException(status_code=403, detail="User not found")
+
+    device_meta = await device_repo.get_device_meta_raw(device_id)
+    if device_meta is None:
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    permissions = [
+        permission
+        for permission in Device.ReadPermissions + Device.EditPermissions
+        if evaluate_permission(permission, user_data, device_meta)
+    ]
+
+    return UserPermissions(
+        Permissions=permissions,
+    )
 
