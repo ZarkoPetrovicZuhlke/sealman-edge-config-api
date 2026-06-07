@@ -25,13 +25,6 @@ class DeviceRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_devices_metadata(
-        self,
-        platform_name: str = "default",
-    ) -> List[Dict[str, Any]]:
-        pass
-
-    @abstractmethod
     async def update_device_metadata(
         self,
         device_id: str,

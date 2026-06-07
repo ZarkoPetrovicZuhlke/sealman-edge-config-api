@@ -132,33 +132,6 @@ class SqlAlchemyDeviceRepository(DeviceRepository):
             "updated_at": device.updated_at,
         }
 
-    async def get_devices_metadata(
-        self,
-        platform_name: str = "default",
-    ) -> List[Dict[str, Any]]:
-
-        platform_meta = await self.get_platform_meta_keys()
-
-        devices = await self.get_devices_joined_snapshot()
-
-        response: List[Dict[str, Any]] = []
-
-        for device in devices:
-            device_meta = device.get("device_meta", {})
-            merged = self._merge_metadata(platform_meta, device_meta)
-
-            response.append(
-                {
-                    "device_id": device.get("device_id"),
-                    "device_status": device.get("connection_state"),
-                    "device_metadata": merged,
-                    "created_at": device.get("created_at"),
-                    "updated_at": device.get("updated_at"),
-                }
-            )
-
-        return response
-
     async def update_device_metadata(
         self,
         device_id: str,
