@@ -29,6 +29,7 @@ class Device:
 
     EditPermissions = [
         DEPLOYMENT_WRITE,
+        NETWORK_WRITE,
         MODULE_EXECUTE_METHOD,
         MODULE_TWIN_CONFIG_WRITE,
         NETWORK_DISCOVER,
