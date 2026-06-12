@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, RootModel
+from pydantic import BaseModel, Field, RootModel
 
 
 class UserPermissions(BaseModel):
@@ -43,12 +43,22 @@ class ScopeResponse(BaseModel):
   description: str | None = None
   attr: Dict[str, Any]
   access_rule: Literal["ALL", "ANY"]
+  team_usage_count: int
 
 
 class TeamSummaryResponse(BaseModel):
   id: UUID
   name: str
   scope_id: UUID | None = None
+
+
+class ScopeDetailsResponse(BaseModel):
+  id: UUID
+  name: str
+  description: str | None = None
+  attr: Dict[str, Any]
+  access_rule: Literal["ALL", "ANY"]
+  teams: List[TeamSummaryResponse] = []
 
 
 class UserSummaryResponse(BaseModel):
@@ -89,7 +99,7 @@ class TeamAddRoleRequest(BaseModel):
 
 
 class ScopeCreateRequest(BaseModel):
-  name: str
+  name: str = Field(min_length=1)
   description: str | None = None
   attr: Dict[str, Any]
   access_rule: Literal["ALL", "ANY"]

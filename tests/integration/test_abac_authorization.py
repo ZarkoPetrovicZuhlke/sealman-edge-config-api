@@ -218,13 +218,18 @@ class TestPlatformAuthorizationEndpoints:
         """A user with platform.authorization.read in their role gets 200."""
         await AbacFixtures(db_session).setup(
             users={"tester": "platform-test-oid"},
+            scopes={"scope-a": {"attr": {"region": "EU"}, "access_rule": "ALL"}},
             roles={"auth-reader": ["platform.authorization.read"]},
-            teams={"t": {"roles": ["auth-reader"], "users": ["tester"]}},
+            teams={"t": {"scope": "scope-a", "roles": ["auth-reader"], "users": ["tester"]}},
         )
 
         response = await client.get("/auth/scopes")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        scopes = response.json()
+        assert isinstance(scopes, list)
+
+        scope_a = next(scope for scope in scopes if scope["name"] == "scope-a")
+        assert scope_a["team_usage_count"] == 1
 
     async def test_read_role_cannot_create_scope(self, client, db_session):
         """platform.authorization.read is not enough for POST /auth/scopes."""

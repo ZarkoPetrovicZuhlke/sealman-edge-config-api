@@ -1,7 +1,7 @@
 from typing import Any, List, Optional, cast
 from uuid import UUID
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.scope import AccessRule, Scope
@@ -12,13 +12,14 @@ from db.repos.scope import ScopeRepository
 
 class ScopeMapper:
     @staticmethod
-    def to_dict(scope: Scope) -> dict[str, Any]:
+    def to_dict(scope: Scope, team_usage_count: int = 0) -> dict[str, Any]:
         return {
             "id": cast(UUID, scope.id),
             "name": cast(str, scope.name),
             "description": cast(Optional[str], scope.description),
             "attr": cast(dict[str, Any], scope.attr),
             "access_rule": cast(AccessRule, scope.access_rule).value,
+            "team_usage_count": team_usage_count,
         }
 
     @staticmethod
@@ -36,9 +37,30 @@ class SQLAlchemyScopeRepository(ScopeRepository):
         self._session = session
 
     async def list(self) -> List[dict[str, Any]]:
-        result = await self._session.execute(select(Scope).order_by(Scope.name))
-        scopes = result.scalars().all()
-        return [ScopeMapper.to_dict(scope) for scope in scopes]
+        team_counts_subquery = (
+            select(
+                Team.scope_id.label("scope_id"),
+                func.count(Team.id).label("team_usage_count"),
+            )
+            .group_by(Team.scope_id)
+            .subquery()
+        )
+
+        result = await self._session.execute(
+            select(
+                Scope,
+                func.coalesce(team_counts_subquery.c.team_usage_count, 0).label(
+                    "team_usage_count"
+                ),
+            )
+            .outerjoin(team_counts_subquery, team_counts_subquery.c.scope_id == Scope.id)
+            .order_by(Scope.name)
+        )
+        scope_rows = result.all()
+        return [
+            ScopeMapper.to_dict(scope, team_usage_count=cast(int, team_usage_count))
+            for scope, team_usage_count in scope_rows
+        ]
 
     async def get(self, scope_id: UUID) -> Optional[dict[str, Any]]:
         scope = await self._session.get(Scope, scope_id)

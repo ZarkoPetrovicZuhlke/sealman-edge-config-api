@@ -4,11 +4,28 @@ from sqlalchemy.exc import IntegrityError
 
 from db.repos.scope import ScopeRepository
 from exceptions import APIError
-from routers.auth.schemas import ScopeCreateRequest, ScopeUpdateRequest
+from routers.auth.schemas import (
+    ScopeCreateRequest,
+    ScopeDetailsResponse,
+    ScopeUpdateRequest,
+    TeamSummaryResponse,
+)
 
 
 async def get_scopes(scope_repo: ScopeRepository):
     return await scope_repo.list()
+
+
+async def get_scope_details(scope_id: UUID, scope_repo: ScopeRepository):
+    scope = await scope_repo.get(scope_id)
+    if scope is None:
+        raise APIError(f"Scope '{scope_id}' was not found", 404)
+
+    teams = await scope_repo.list_teams(scope_id)
+    return ScopeDetailsResponse(
+        **scope,
+        teams=[TeamSummaryResponse(**team) for team in teams],
+    )
 
 
 async def create_scope(
@@ -31,6 +48,9 @@ async def update_scope(
     request: ScopeUpdateRequest,
     scope_repo: ScopeRepository,
 ):
+    if request.name.strip() == "":
+        raise APIError("Field 'name' must not be empty", 400)
+
     if await scope_repo.get(scope_id) is None:
         raise APIError(f"Scope '{scope_id}' was not found", 404)
 

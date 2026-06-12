@@ -22,6 +22,7 @@ from routers.auth.schemas import (
     RoleResponse,
     RoleUpdateRequest,
     ScopeCreateRequest,
+    ScopeDetailsResponse,
     ScopeListResponse,
     ScopeResponse,
     ScopeUpdateRequest,
@@ -205,6 +206,15 @@ async def get_users(
 async def get_scopes(_ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_READ)),
                     scope_repo: ScopeRepository = Depends(get_repository(ScopeRepository))):
     return await scope.get_scopes(scope_repo)
+
+
+@auth.get("/scopes/{scope_id}", response_model=ScopeDetailsResponse)
+async def get_scope_details(
+    scope_id: UUID,
+    _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_READ)),
+    scope_repo: ScopeRepository = Depends(get_repository(ScopeRepository)),
+):
+    return await scope.get_scope_details(scope_id, scope_repo)
 
 
 @auth.post("/scopes", response_model=ScopeResponse)
