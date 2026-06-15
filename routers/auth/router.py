@@ -26,7 +26,6 @@ from routers.auth.schemas import (
     ScopeListResponse,
     ScopeResponse,
     ScopeUpdateRequest,
-    TeamAddRoleRequest,
     TeamAddUserRequest,
     TeamCreateRequest,
     TeamDetailsResponse,
@@ -114,21 +113,21 @@ async def create_team(
     _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_WRITE)),
     team_repo: TeamRepository = Depends(get_repository(TeamRepository)),
     scope_repo: ScopeRepository = Depends(get_repository(ScopeRepository)),
-    user_repo: UserRepository = Depends(get_repository(UserRepository)),
     role_repo: RoleRepository = Depends(get_repository(RoleRepository)),
 ):
-    return await team.create_team(request, team_repo, scope_repo, user_repo, role_repo)
+    return await team.create_team(request, team_repo, scope_repo, role_repo)
 
 
-@auth.put("/teams/{team_id}", response_model=TeamSummaryResponse)
+@auth.put("/teams/{team_id}", response_model=TeamDetailsResponse)
 async def update_team(
     team_id: UUID,
     request: TeamUpdateRequest,
     _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_WRITE)),
     team_repo: TeamRepository = Depends(get_repository(TeamRepository)),
     scope_repo: ScopeRepository = Depends(get_repository(ScopeRepository)),
+    role_repo: RoleRepository = Depends(get_repository(RoleRepository)),
 ):
-    return await team.update_team(team_id, request, team_repo, scope_repo)
+    return await team.update_team(team_id, request, team_repo, scope_repo, role_repo)
 
 
 @auth.post("/teams/{team_id}/users", response_model=TeamDetailsResponse)
@@ -150,27 +149,6 @@ async def remove_user_from_team(
     team_repo: TeamRepository = Depends(get_repository(TeamRepository)),
 ):
     return await team.remove_user_from_team(team_id, user_id, team_repo)
-
-
-@auth.post("/teams/{team_id}/roles", response_model=TeamDetailsResponse)
-async def add_role_to_team(
-    team_id: UUID,
-    request: TeamAddRoleRequest,
-    _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_WRITE)),
-    team_repo: TeamRepository = Depends(get_repository(TeamRepository)),
-    role_repo: RoleRepository = Depends(get_repository(RoleRepository)),
-):
-    return await team.add_role_to_team(team_id, request, team_repo, role_repo)
-
-
-@auth.delete("/teams/{team_id}/roles/{role_id}", response_model=None, status_code=204)
-async def remove_role_from_team(
-    team_id: UUID,
-    role_id: UUID,
-    _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_WRITE)),
-    team_repo: TeamRepository = Depends(get_repository(TeamRepository)),
-):
-    return await team.remove_role_from_team(team_id, role_id, team_repo)
 
 
 @auth.delete("/teams/{team_id}", response_model=None, status_code=204)

@@ -298,6 +298,48 @@ class TestPlatformAuthorizationEndpoints:
             }
         ]
 
+    async def test_user_with_authorization_read_can_list_teams_with_roles_scope_and_user_count(
+        self, client, db_session
+    ):
+        """GET /auth/teams returns role list, scope object, and assigned user count."""
+        world = await AbacFixtures(db_session).setup(
+            users={
+                "tester": "platform-test-oid",
+                "member": "platform-member-oid",
+            },
+            scopes={
+                "ops-scope": {
+                    "attr": {"region": "EU"},
+                    "access_rule": "ALL",
+                    "description": "Operations",
+                }
+            },
+            roles={
+                "auth-reader": ["platform.authorization.read"],
+                "device-reader": ["device.read"],
+            },
+            teams={
+                "ops-team": {
+                    "scope": "ops-scope",
+                    "roles": ["auth-reader", "device-reader"],
+                    "users": ["tester", "member"],
+                }
+            },
+        )
+
+        response = await client.get("/auth/teams")
+        assert response.status_code == 200
+
+        teams = response.json()
+        ops_team = next(team for team in teams if team["name"] == "ops-team")
+        assert ops_team["id"] == str(world.teams["ops-team"])
+        assert ops_team["user_count"] == 2
+        assert ops_team["scope"]["id"] == str(world.scopes["ops-scope"])
+        assert ops_team["scope"]["name"] == "ops-scope"
+        assert ops_team["scope"]["attr"] == {"region": "EU"}
+        role_names = {role["name"] for role in ops_team["roles"]}
+        assert role_names == {"auth-reader", "device-reader"}
+
     async def test_user_with_authorization_write_can_replace_role_actions(
         self, client, db_session
     ):

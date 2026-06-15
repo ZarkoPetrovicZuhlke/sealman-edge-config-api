@@ -79,6 +79,12 @@ class TeamDetailsResponse(TeamSummaryResponse):
   users: List[UserSummaryResponse] = []
 
 
+class TeamListItemResponse(TeamSummaryResponse):
+  scope: ScopeResponse | None = None
+  roles: List[RoleResponse] = []
+  user_count: int = 0
+
+
 class UserWithTeamsResponse(UserSummaryResponse):
   teams: List[TeamSummaryResponse] = []
 
@@ -86,13 +92,13 @@ class UserWithTeamsResponse(UserSummaryResponse):
 class TeamCreateRequest(BaseModel):
   name: str
   scope_id: UUID | None = None
-  user_ids: List[str] = []
   role_ids: List[UUID] = []
 
 
 class TeamUpdateRequest(BaseModel):
   name: str
   scope_id: UUID | None = None
+  role_ids: List[UUID] = []
 
 
 class TeamAddUserRequest(BaseModel):
@@ -117,7 +123,7 @@ class ScopeUpdateRequest(BaseModel):
   access_rule: Literal["ALL", "ANY"]
 
 
-class TeamListResponse(RootModel[List[TeamSummaryResponse]]):
+class TeamListResponse(RootModel[List[TeamListItemResponse]]):
   pass
 
 

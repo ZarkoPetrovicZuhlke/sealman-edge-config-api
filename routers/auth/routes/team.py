@@ -8,7 +8,7 @@ from db.repos.scope import ScopeRepository
 from db.repos.team import TeamRepository
 from db.repos.user import UserRepository
 from exceptions import APIError
-from routers.auth.schemas import TeamAddRoleRequest, TeamAddUserRequest, TeamCreateRequest, TeamUpdateRequest
+from routers.auth.schemas import TeamAddUserRequest, TeamCreateRequest, TeamUpdateRequest
 
 
 async def get_teams(team_repo: TeamRepository):
@@ -26,7 +26,6 @@ async def create_team(
     request: TeamCreateRequest,
     team_repo: TeamRepository,
     scope_repo: ScopeRepository,
-    user_repo: UserRepository,
     role_repo: RoleRepository,
 ):
     if request.scope_id is not None:
@@ -34,20 +33,8 @@ async def create_team(
         if scope is None:
             raise APIError(f"Scope '{request.scope_id}' was not found", 404)
 
-    if len(request.user_ids) != len(set(request.user_ids)):
-        raise APIError("Duplicate user IDs in request", 400)
-
     if len(request.role_ids) != len(set(request.role_ids)):
         raise APIError("Duplicate role IDs in request", 400)
-
-    found_users = await user_repo.get_by_ids(request.user_ids)
-    found_user_ids = {user["id"] for user in found_users}
-    missing_user_ids = sorted(set(request.user_ids) - found_user_ids)
-    if missing_user_ids:
-        raise APIError(
-            f"Users not found: {', '.join(missing_user_ids)}",
-            404,
-        )
 
     found_roles = await role_repo.get_by_ids(request.role_ids)
     found_role_ids = {str(role["id"]) for role in found_roles}
@@ -64,7 +51,6 @@ async def create_team(
         return await team_repo.create(
             name=request.name,
             scope_id=request.scope_id,
-            user_ids=request.user_ids,
             role_ids=request.role_ids,
         )
     except IntegrityError:
@@ -76,6 +62,7 @@ async def update_team(
     request: TeamUpdateRequest,
     team_repo: TeamRepository,
     scope_repo: ScopeRepository,
+    role_repo: RoleRepository,
 ):
     if await team_repo.get(team_id) is None:
         raise APIError(f"Team '{team_id}' was not found", 404)
@@ -85,14 +72,33 @@ async def update_team(
         if scope is None:
             raise APIError(f"Scope '{request.scope_id}' was not found", 404)
 
+    payload = request.model_dump()
+    team_name = cast(str, payload["name"])
+    role_ids = cast(list[UUID], payload["role_ids"])
+
+    if len(role_ids) != len(set(role_ids)):
+        raise APIError("Duplicate role IDs in request", 400)
+
+    found_roles = await role_repo.get_by_ids(role_ids)
+    found_role_ids = {str(role["id"]) for role in found_roles}
+    missing_role_ids = sorted(
+        str(rid) for rid in role_ids if str(rid) not in found_role_ids
+    )
+    if missing_role_ids:
+        raise APIError(
+            f"Roles not found: {', '.join(missing_role_ids)}",
+            404,
+        )
+
     try:
         team = await team_repo.update(
             team_id=team_id,
-            name=request.name,
-            scope_id=request.scope_id,
+            name=team_name,
+            scope_id=cast(UUID | None, payload["scope_id"]),
+            role_ids=role_ids,
         )
     except IntegrityError:
-        raise APIError(f"Team with name '{request.name}' already exists", 409)
+        raise APIError(f"Team with name '{team_name}' already exists", 409)
 
     if team is None:
         raise APIError(f"Team '{team_id}' was not found", 404)
@@ -138,47 +144,6 @@ async def remove_user_from_team(
     removed = await team_repo.remove_user(team_id, user_id)
     if not removed:
         raise APIError(f"User '{user_id}' is not assigned to team '{team_id}'", 404)
-
-
-async def add_role_to_team(
-    team_id: UUID,
-    request: TeamAddRoleRequest,
-    team_repo: TeamRepository,
-    role_repo: RoleRepository,
-):
-    team = await team_repo.get_with_details(team_id)
-    if team is None:
-        raise APIError(f"Team '{team_id}' was not found", 404)
-
-    if any(cast(UUID, role["id"]) == request.role_id for role in cast(list[dict], team["roles"])):
-        raise APIError(f"Role '{request.role_id}' already assigned to team '{team_id}'", 409)
-
-    role = await role_repo.get(request.role_id)
-    if role is None:
-        raise APIError(f"Role '{request.role_id}' was not found", 404)
-
-    updated = await team_repo.add_role(team_id, request.role_id)
-    if updated is None:
-        raise APIError(f"Team '{team_id}' was not found", 404)
-    return updated
-
-
-async def remove_role_from_team(
-    team_id: UUID,
-    role_id: UUID,
-    team_repo: TeamRepository,
-):
-    team = await team_repo.get_with_details(team_id)
-    if team is None:
-        raise APIError(f"Team '{team_id}' was not found", 404)
-
-    target_role = next((role for role in cast(list[dict], team["roles"]) if cast(UUID, role["id"]) == role_id), None)
-    if target_role is None:
-        raise APIError(f"Role '{role_id}' is not assigned to team '{team_id}'", 404)
-
-    removed = await team_repo.remove_role(team_id, role_id)
-    if not removed:
-        raise APIError(f"Role '{role_id}' is not assigned to team '{team_id}'", 404)
 
 
 async def delete_team(team_id: UUID, team_repo: TeamRepository):

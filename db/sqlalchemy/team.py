@@ -43,6 +43,17 @@ class TeamMapper:
             "users": [TeamMapper.user_to_dict(user) for user in sorted(team.users, key=lambda item: item.preferred_username)],
         }
 
+    @staticmethod
+    def to_list_item_dict(team: Team) -> dict[str, Any]:
+        return {
+            "id": cast(UUID, team.id),
+            "name": cast(str, team.name),
+            "scope_id": cast(Optional[UUID], team.scope_id),
+            "scope": ScopeMapper.to_dict(team.scope) if team.scope else None,
+            "roles": [RoleMapper.to_dict(role) for role in sorted(team.assigned_roles, key=lambda item: item.name)],
+            "user_count": len(team.users),
+        }
+
 
 @register_repository(TeamRepository)
 class SQLAlchemyTeamRepository(TeamRepository):
@@ -63,9 +74,17 @@ class SQLAlchemyTeamRepository(TeamRepository):
         return result.scalar_one_or_none()
 
     async def list(self) -> List[dict[str, Any]]:
-        result = await self._session.execute(select(Team).order_by(Team.name))
+        result = await self._session.execute(
+            select(Team)
+            .options(
+                selectinload(Team.scope),
+                selectinload(Team.users),
+                selectinload(Team.assigned_roles).selectinload(Role.allowed_actions),
+            )
+            .order_by(Team.name)
+        )
         teams = result.scalars().all()
-        return [TeamMapper.to_dict(team) for team in teams]
+        return [TeamMapper.to_list_item_dict(team) for team in teams]
 
     async def get(self, team_id: UUID) -> Optional[dict[str, Any]]:
         team = await self._session.get(Team, team_id)
@@ -117,17 +136,28 @@ class SQLAlchemyTeamRepository(TeamRepository):
         team_id: UUID,
         name: str,
         scope_id: Optional[UUID] = None,
+        role_ids: Optional[List[UUID]] = None,
     ) -> Optional[dict[str, Any]]:
-        team = await self._session.get(Team, team_id)
+        team = await self._get_team_with_details(team_id)
         if team is None:
             return None
 
         setattr(team, "name", name)
         setattr(team, "scope_id", scope_id)
 
+        if role_ids is not None:
+            roles = []
+            if role_ids:
+                result = await self._session.execute(
+                    select(Role).where(Role.id.in_(role_ids))
+                )
+                roles = list(result.scalars().all())
+            team.assigned_roles = roles
+
         await self._session.commit()
-        await self._session.refresh(team)
-        return TeamMapper.to_dict(team)
+
+        refreshed = await self._get_team_with_details(team_id)
+        return TeamMapper.to_details_dict(refreshed) if refreshed else None
 
     async def add_user(
         self,

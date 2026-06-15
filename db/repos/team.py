@@ -33,6 +33,7 @@ class TeamRepository(ABC):
         team_id: UUID,
         name: str,
         scope_id: Optional[UUID] = None,
+        role_ids: Optional[List[UUID]] = None,
     ) -> Optional[dict[str, Any]]:
         pass
 
