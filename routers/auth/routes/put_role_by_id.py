@@ -9,4 +9,5 @@ async def put_role_by_id(role_id: UUID, body: RoleUpdateRequest, role_repo: Role
         role_id=role_id,
         name=body.name,
         description=body.description,
+        action_names=body.actions,
     )

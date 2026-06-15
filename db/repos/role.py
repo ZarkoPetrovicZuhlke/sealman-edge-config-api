@@ -21,6 +21,10 @@ class RoleRepository(ABC):
         pass
 
     @abstractmethod
+    async def list_teams(self, role_id: UUID) -> list[dict[str, Any]]:
+        pass
+
+    @abstractmethod
     async def create_role(self, name: str, description: str | None, action_names: list[str]) -> dict[str, Any]:
         pass
 
@@ -30,6 +34,7 @@ class RoleRepository(ABC):
         role_id: UUID,
         name: str,
         description: str | None,
+        action_names: list[str],
     ) -> Optional[dict[str, Any]]:
         pass
 

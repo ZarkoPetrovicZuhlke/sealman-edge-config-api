@@ -15,8 +15,9 @@ class RoleCreateRequest(BaseModel):
 
 
 class RoleUpdateRequest(BaseModel):
-    name: str
-    description: str | None = None
+  name: str
+  description: str | None = None
+  actions: List[str]
 
 
 class RoleActionsRequest(BaseModel):
@@ -50,6 +51,10 @@ class TeamSummaryResponse(BaseModel):
   id: UUID
   name: str
   scope_id: UUID | None = None
+
+
+class RoleDetailsResponse(RoleResponse):
+  teams: List[TeamSummaryResponse] = []
 
 
 class ScopeDetailsResponse(BaseModel):

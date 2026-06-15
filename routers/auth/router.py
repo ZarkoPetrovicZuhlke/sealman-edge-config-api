@@ -17,8 +17,8 @@ from db.repos.role import RoleRepository
 from db.session import get_repository
 from routers.auth.schemas import (
     ActionResponse,
-    RoleActionsRequest,
     RoleCreateRequest,
+    RoleDetailsResponse,
     RoleResponse,
     RoleUpdateRequest,
     ScopeCreateRequest,
@@ -50,6 +50,15 @@ async def get_roles(_ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_READ)
     return await role.get_roles(role_repo)
 
 
+@auth.get("/roles/{role_id}", response_model=RoleDetailsResponse)
+async def get_role_by_id(
+    role_id: UUID,
+    _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_READ)),
+    role_repo: RoleRepository = Depends(get_repository(RoleRepository)),
+):
+    return await role.get_role_by_id(role_id, role_repo)
+
+
 @auth.get("/actions", response_model=list[ActionResponse])
 async def get_actions(_ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_READ)),
                      action_repo: ActionRepository = Depends(get_repository(ActionRepository))):
@@ -72,29 +81,9 @@ async def put_role_by_id(
     body: RoleUpdateRequest,
     _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_WRITE)),
     role_repo: RoleRepository = Depends(get_repository(RoleRepository)),
-):
-    return await role.put_role_by_id(role_id, body, role_repo)
-
-
-@auth.post("/roles/{role_id}/actions", response_model=RoleResponse)
-async def post_role_actions(
-    role_id: UUID,
-    body: RoleActionsRequest,
-    _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_WRITE)),
-    role_repo: RoleRepository = Depends(get_repository(RoleRepository)),
     action_repo: ActionRepository = Depends(get_repository(ActionRepository)),
 ):
-    return await role.post_role_actions(role_id, body, role_repo, action_repo)
-
-
-@auth.delete("/roles/{role_id}/actions/{name}", response_model=RoleResponse)
-async def delete_role_action_by_name(
-    role_id: UUID,
-    name: str,
-    _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_WRITE)),
-    role_repo: RoleRepository = Depends(get_repository(RoleRepository)),
-):
-    return await role.delete_role_action_by_name(role_id, name, role_repo)
+    return await role.put_role_by_id(role_id, body, role_repo, action_repo)
 
 
 @auth.delete("/roles/{role_id}", response_model=None, status_code=204)

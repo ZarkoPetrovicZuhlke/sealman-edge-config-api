@@ -265,6 +265,73 @@ class TestPlatformAuthorizationEndpoints:
         response = await client.get("/auth/scopes")
         assert response.status_code == 403
 
+    async def test_user_with_authorization_read_can_get_role_details(
+        self, client, db_session
+    ):
+        """A user with platform.authorization.read can fetch role details by id."""
+        world = await AbacFixtures(db_session).setup(
+            users={"tester": "platform-test-oid"},
+            roles={
+                "auth-reader": ["platform.authorization.read"],
+                "device-reader": ["device.read"],
+            },
+            teams={
+                "role-consumers": {
+                    "roles": ["device-reader", "auth-reader"],
+                    "users": ["tester"],
+                }
+            },
+        )
+
+        target_role_id = world.roles["device-reader"]
+        response = await client.get(f"/auth/roles/{target_role_id}")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["id"] == str(target_role_id)
+        assert payload["name"] == "device-reader"
+        assert payload["actions"] == ["device.read"]
+        assert payload["teams"] == [
+            {
+                "id": str(world.teams["role-consumers"]),
+                "name": "role-consumers",
+            }
+        ]
+
+    async def test_user_with_authorization_write_can_replace_role_actions(
+        self, client, db_session
+    ):
+        """PUT /auth/roles/{id} replaces assigned actions with requested list."""
+        world = await AbacFixtures(db_session).setup(
+            users={"tester": "platform-test-oid"},
+            roles={
+                "auth-writer": ["platform.authorization.write"],
+                "managed-role": ["device.read", "device.network.discover"],
+            },
+            teams={
+                "writers": {
+                    "roles": ["auth-writer"],
+                    "users": ["tester"],
+                }
+            },
+        )
+
+        target_role_id = world.roles["managed-role"]
+        response = await client.put(
+            f"/auth/roles/{target_role_id}",
+            json={
+                "name": "managed-role",
+                "description": "updated role",
+                "actions": ["device.network.discover", "device.line.write"],
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["id"] == str(target_role_id)
+        assert payload["description"] == "updated role"
+        assert payload["actions"] == ["device.line.write", "device.network.discover"]
+
 
 # ===========================================================================
 # Tests: device list endpoint with scope-based filtering

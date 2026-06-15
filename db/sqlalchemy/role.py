@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.action import Action
 from db.models.role import Role, role_actions
+from db.models.team import Team, team_assigned_roles
 from db.registry import register_repository
 from db.repos.role import RoleRepository
 
@@ -64,6 +65,23 @@ class SqlAlchemyRoleRepository(RoleRepository):
         roles = result.scalars().all()
         return [RoleMapper.to_dict(role) for role in roles]
 
+    async def list_teams(self, role_id: UUID) -> list[dict[str, Any]]:
+        result = await self._session.execute(
+            select(Team)
+            .join(team_assigned_roles, team_assigned_roles.c.team_id == Team.id)
+            .where(team_assigned_roles.c.role_id == role_id)
+            .order_by(Team.name)
+        )
+        teams = result.scalars().all()
+        return [
+            {
+                "id": team.id,
+                "name": team.name,
+                "scope_id": team.scope_id,
+            }
+            for team in teams
+        ]
+
     async def list_roles(self) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(Role).options(selectinload(Role.allowed_actions)).order_by(Role.name)
@@ -97,13 +115,22 @@ class SqlAlchemyRoleRepository(RoleRepository):
         role_id: UUID,
         name: str,
         description: str | None,
+        action_names: list[str],
     ) -> Optional[dict[str, Any]]:
         role = await self._fetch_role(role_id)
         if role is None:
             return None
 
+        actions = []
+        if action_names:
+            result = await self._session.execute(
+                select(Action).where(Action.name.in_(action_names))
+            )
+            actions = list(result.scalars().all())
+
         setattr(role, "name", name)
         setattr(role, "description", description)
+        role.allowed_actions = actions
         await self._session.commit()
         await self._session.refresh(role)
 
