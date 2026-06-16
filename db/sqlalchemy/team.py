@@ -1,7 +1,7 @@
 from typing import Any, List, Optional, cast
 from uuid import UUID
 
-from sqlalchemy import insert, select, delete as sa_delete
+from sqlalchemy import insert, select, update, delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -116,6 +116,12 @@ class SQLAlchemyTeamRepository(TeamRepository):
                 insert(team_assigned_users),
                 [{"team_id": team_id, "user_id": user_id} for user_id in user_ids],
             )
+            await self._session.execute(
+                update(User)
+                .where(User.id.in_(user_ids))
+                .where(User.is_new.is_(True))
+                .values(is_new=False)
+            )
 
         if role_ids:
             await self._session.execute(
@@ -173,6 +179,8 @@ class SQLAlchemyTeamRepository(TeamRepository):
             return None
 
         team.users.append(user)
+        if cast(bool, user.is_new):
+            setattr(user, "is_new", False)
 
         await self._session.commit()
         refreshed = await self._get_team_with_details(team_id)

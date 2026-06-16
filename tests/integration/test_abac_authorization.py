@@ -374,6 +374,57 @@ class TestPlatformAuthorizationEndpoints:
         assert payload["description"] == "updated role"
         assert payload["actions"] == ["device.line.write", "device.network.discover"]
 
+    async def test_assigning_user_to_team_marks_user_as_not_new(
+        self, client, db_session
+    ):
+        """When assigning a user to a team, their is_new flag is set to false."""
+        await AbacFixtures(db_session).setup(
+            users={
+                "tester": "platform-test-oid",
+                "new-user": "brand-new-oid",
+            },
+            roles={
+                "auth-admin": [
+                    "platform.authorization.read",
+                    "platform.authorization.write",
+                ]
+            },
+            teams={
+                "admins": {
+                    "roles": ["auth-admin"],
+                    "users": ["tester"],
+                }
+            },
+        )
+
+        before_response = await client.get("/auth/users?is_new=true")
+        assert before_response.status_code == 200
+        before_ids = {user["id"] for user in before_response.json()}
+        assert "brand-new-oid" in before_ids
+
+        create_team_response = await client.post(
+            "/auth/teams",
+            json={"name": "target-team", "role_ids": []},
+        )
+        assert create_team_response.status_code == 200
+        created_team_id = create_team_response.json()["id"]
+
+        add_user_response = await client.post(
+            f"/auth/teams/{created_team_id}/users",
+            json={"user_id": "brand-new-oid"},
+        )
+        assert add_user_response.status_code == 200
+
+        after_new_response = await client.get("/auth/users?is_new=true")
+        assert after_new_response.status_code == 200
+        after_new_ids = {user["id"] for user in after_new_response.json()}
+        assert "brand-new-oid" not in after_new_ids
+
+        after_existing_response = await client.get("/auth/users?is_new=false")
+        assert after_existing_response.status_code == 200
+        after_existing_ids = {user["id"] for user in after_existing_response.json()}
+        assert "brand-new-oid" in after_existing_ids
+
 
 # ===========================================================================
 # Tests: device list endpoint with scope-based filtering
