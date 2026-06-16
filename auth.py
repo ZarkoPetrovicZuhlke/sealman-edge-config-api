@@ -222,7 +222,6 @@ async def ensure_user_exists(
 ) -> dict:
     """
     Provisions a new user row on first access.
-    Uses INSERT ... ON CONFLICT (id) DO NOTHING so existing users are never modified.
     """
     user_oid = auth_context.get("oid") or auth_context.get("sub")
     if not user_oid:
