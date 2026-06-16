@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Dict, List, Literal
 from uuid import UUID
 
@@ -86,6 +87,7 @@ class TeamListItemResponse(TeamSummaryResponse):
 
 
 class UserWithTeamsResponse(UserSummaryResponse):
+  last_active: datetime | None = None
   teams: List[TeamSummaryResponse] = []
 
 

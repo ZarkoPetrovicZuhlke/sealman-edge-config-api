@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Any, List, Optional, cast
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -21,6 +22,7 @@ class UserMapper:
             "preferred_username": cast(str, user.preferred_username),
             "is_admin": cast(bool, user.is_admin),
             "is_new": cast(bool, user.is_new),
+            "last_active": cast(Optional[datetime], user.last_active),
         }
         if include_teams:
             teams = sorted(user.teams, key=lambda item: item.name)
@@ -72,18 +74,6 @@ class SQLAlchemyUserRepository(UserRepository):
         users = result.scalars().all()
         return [UserMapper.to_dict(user, include_teams=True) for user in users]
 
-    async def get_by_ids(self, user_ids: List[str]) -> List[dict[str, Any]]:
-        if not user_ids:
-            return []
-
-        result = await self._session.execute(
-            select(UserContext)
-            .options(selectinload(UserContext.teams))
-            .where(UserContext.id.in_(user_ids))
-        )
-        users = result.scalars().all()
-        return [UserContextMapper.to_dict(user, include_teams=True) for user in users]
-
     async def create(
         self,
         user_id: str,
@@ -134,8 +124,17 @@ class SQLAlchemyUserRepository(UserRepository):
     ) -> None:
         stmt = (
             pg_insert(User)
-            .values(id=user_id, preferred_username=preferred_username, is_admin=is_admin, is_new=True)
-            .on_conflict_do_nothing(index_elements=["id"])
+            .values(
+                id=user_id,
+                preferred_username=preferred_username,
+                is_admin=is_admin,
+                is_new=True,
+                last_active=func.now(),
+            )
+            .on_conflict_do_update(
+                index_elements=["id"],
+                set_=dict(last_active=func.now()),
+            )
         )
         await self._session.execute(stmt)
         await self._session.commit()
