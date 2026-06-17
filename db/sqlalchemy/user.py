@@ -133,7 +133,7 @@ class SQLAlchemyUserRepository(UserRepository):
             )
             .on_conflict_do_update(
                 index_elements=["id"],
-                set_=dict(last_active=func.now()),
+                set_=dict(is_admin=is_admin, last_active=func.now()),
             )
         )
         await self._session.execute(stmt)
