@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, RootModel
 
 
 class UserPermissions(BaseModel):
-  Permissions: List[str] = []
+  permissions: List[str] = []
 
 
 class RoleCreateRequest(BaseModel):
@@ -135,3 +135,9 @@ class UserListResponse(RootModel[List[UserWithTeamsResponse]]):
 
 class ScopeListResponse(RootModel[List[ScopeResponse]]):
   pass
+
+
+class CurrentUserResponse(BaseModel):
+  id: str
+  is_admin: bool
+  is_new: bool

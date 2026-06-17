@@ -17,6 +17,7 @@ from db.repos.role import RoleRepository
 from db.session import get_repository
 from routers.auth.schemas import (
     ActionResponse,
+    CurrentUserResponse,
     RoleCreateRequest,
     RoleDetailsResponse,
     RoleResponse,
@@ -212,6 +213,26 @@ async def delete_scope(
     return await scope.delete_scope(scope_id, scope_repo)
 
 
+@auth.get("/user", response_model=CurrentUserResponse)
+async def get_current_user(
+    auth_context: dict = Depends(validate_jwt),
+    user_repo: UserRepository = Depends(get_repository(UserRepository)),
+):
+    user_id = auth_context.get("oid") or auth_context.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=403, detail="User identifier missing from token")
+
+    user = await user_repo.get(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return CurrentUserResponse(
+        id=user["id"],
+        is_admin=user["is_admin"],
+        is_new=user["is_new"],
+    )
+
+
 @auth.get("/permissions/platform", response_model=UserPermissions)
 async def get_platform_permissions(
     auth_context: dict = Depends(validate_jwt),
@@ -232,7 +253,7 @@ async def get_platform_permissions(
     ]
 
     return UserPermissions(
-        Permissions=permissions,
+        permissions=permissions,
     )
 
 
@@ -262,6 +283,6 @@ async def get_device_permissions(
     ]
 
     return UserPermissions(
-        Permissions=permissions,
+        permissions=permissions,
     )
 
