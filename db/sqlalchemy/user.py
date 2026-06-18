@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, List, Optional, cast
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, literal, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -128,12 +128,19 @@ class SQLAlchemyUserRepository(UserRepository):
                 id=user_id,
                 preferred_username=preferred_username,
                 is_admin=is_admin,
-                is_new=True,
+                is_new=False if is_admin else True,
                 last_active=func.now(),
             )
             .on_conflict_do_update(
                 index_elements=["id"],
-                set_=dict(is_admin=is_admin, last_active=func.now()),
+                set_=dict(
+                    is_admin=is_admin,
+                    is_new=case(
+                        (literal(is_admin), False),
+                        else_=User.is_new,
+                    ),
+                    last_active=func.now(),
+                ),
             )
         )
         await self._session.execute(stmt)

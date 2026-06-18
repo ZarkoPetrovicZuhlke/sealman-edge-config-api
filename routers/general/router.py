@@ -37,7 +37,7 @@ logger = logging.getLogger("EdgeConfigAPI")
 @general.patch("/{device}/metadata", response_model=DeviceMetadataResponse, tags=["General"])
 async def patch_device_metadata(device: str, metadata: Dict[str, Any],
                                 repo: DeviceRepository = Depends(get_repository(DeviceRepository)),
-                                _ = Depends(ABACPermissionCheck(Device.READ))):
+                                _ = Depends(ABACPermissionCheck(Device.METADATA_WRITE))):
     device_metadata = await _patch_device_metadata(device, metadata=metadata, repo=repo)
     return device_metadata
 

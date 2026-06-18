@@ -39,7 +39,7 @@ import warnings
 import httpx
 import pytest
 from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
@@ -72,12 +72,15 @@ def postgres_container() -> Generator[str, None, None]:
 @pytest.fixture(scope="session")
 def apply_migrations(postgres_container: str) -> None:
     """
-    Run all Alembic migrations against the container DB exactly once.
+    Run all Alembic migrations against the container DB exactly once,
+    then sync permissions from permission_types.py so that any permissions
+    defined in code (but not yet in a migration) are available to tests.
 
     We temporarily patch ``constants.POSTGRES_URL`` so that env.py picks
     up the container URL when Alembic re-executes the script.  The patch is
     restored afterwards so the rest of the application is unaffected.
     """
+    import asyncio
     import constants
     from alembic import command
     from alembic.config import Config
@@ -89,6 +92,24 @@ def apply_migrations(postgres_container: str) -> None:
         command.upgrade(cfg, "head")
     finally:
         constants.POSTGRES_URL = _original
+
+    # Sync permissions defined in code to the test database — mirrors what
+    # the app lifespan does on real startup.
+    from authorization.sync_permissions import sync_permissions_to_db
+    from db import session as session_mod
+
+    _original_engine = session_mod.engine
+    _original_session_local = session_mod.AsyncSessionLocal
+
+    session_mod.engine = create_async_engine(postgres_container, poolclass=NullPool)
+    session_mod.AsyncSessionLocal = async_sessionmaker(
+        bind=session_mod.engine, expire_on_commit=False
+    )
+    try:
+        asyncio.run(sync_permissions_to_db())
+    finally:
+        session_mod.engine = _original_engine
+        session_mod.AsyncSessionLocal = _original_session_local
 
 
 # ---------------------------------------------------------------------------

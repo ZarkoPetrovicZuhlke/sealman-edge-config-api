@@ -1,7 +1,7 @@
 """Add last_active column to users table
 
 Revision ID: f8eacd07ed92
-Revises: 8d4d5d5c121e
+Revises: 0716880095d7
 Create Date: 2026-06-16
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'f8eacd07ed92'
-down_revision: Union[str, None] = '8d4d5d5c121e'
+down_revision: Union[str, None] = '0716880095d7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

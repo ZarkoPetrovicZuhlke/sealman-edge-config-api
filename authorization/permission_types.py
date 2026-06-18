@@ -9,9 +9,16 @@ class Platform:
         AUTHORIZATION_WRITE,
     ]
 
+    _is_global = True
+    _descriptions = {
+        AUTHORIZATION_READ: "Read platform authorization data (users, teams, roles, permissions)",
+        AUTHORIZATION_WRITE: "Write platform authorization data (users, teams, roles, permissions)",
+    }
+
 
 class Device:
     READ = "device.read"
+    METADATA_WRITE = "device.metadata.write"
     DEPLOYMENT_WRITE = "device.deployment.write"
     MODULE_EXECUTE_METHOD = "device.module.execute_method"
     NETWORK_WRITE = "device.network.write"
@@ -28,6 +35,7 @@ class Device:
     ]
 
     EditPermissions = [
+        METADATA_WRITE,
         DEPLOYMENT_WRITE,
         NETWORK_WRITE,
         MODULE_EXECUTE_METHOD,
@@ -38,6 +46,21 @@ class Device:
         SMARTEMS_TEMPLATE_APPLY,
     ]
 
+    _is_global = False
+    _descriptions = {
+        READ: "Read device details",
+        METADATA_WRITE: "Update device metadata",
+        DEPLOYMENT_WRITE: "Create or update device deployments",
+        MODULE_EXECUTE_METHOD: "Execute direct methods on a device module",
+        NETWORK_WRITE: "Update device network settings",
+        SMARTEMS_TEMPLATE_APPLY: "Apply the default Smart EMS template to a device",
+        PASSWORD_READ: "Read a device password",
+        PASSWORD_WRITE: "Update a device password",
+        MODULE_TWIN_CONFIG_WRITE: "Update device module twin configuration",
+        NETWORK_DISCOVER: "Run device network discovery",
+        LINE_WRITE: "Update device line settings",
+    }
+
 
 def _get_permission_names(resource_type):
     return {
@@ -45,6 +68,22 @@ def _get_permission_names(resource_type):
         for attribute_name, attribute_value in vars(resource_type).items()
         if attribute_name.isupper() and isinstance(attribute_value, str)
     }
+
+
+RESOURCE_TYPES = [Platform, Device]
+
+
+def get_all_permissions() -> list[dict]:
+    """Returns all defined permissions with their metadata (name, description, is_global)."""
+    permissions = []
+    for resource_type in RESOURCE_TYPES:
+        for permission_name in _get_permission_names(resource_type).values():
+            permissions.append({
+                "name": permission_name,
+                "description": resource_type._descriptions.get(permission_name, ""),
+                "is_global": resource_type._is_global,
+            })
+    return permissions
 
 
 # Validates that there are no duplicate permission names across the given resource types, 
@@ -70,4 +109,4 @@ def _validate_unique_permission_names(*resource_types):
             seen_permissions[permission_name] = (resource_type.__name__, attribute_name)
 
 
-_validate_unique_permission_names(Platform, Device)
+_validate_unique_permission_names(*RESOURCE_TYPES)

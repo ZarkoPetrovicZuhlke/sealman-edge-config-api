@@ -29,6 +29,7 @@ from routers.devices.routes.get_devices import populate_cache_from_iot_hub_query
 from routers.smart_ems.password_renewal_task_processor import process_password_renewal_tasks
 from smart_ems import init_smart_ems
 from bootstrap import bootstrap_sems, bootstrap_iothub_base_deployment
+from authorization.sync_permissions import sync_permissions_to_db
 from helper import AuditTrail
 
 from routers.cmd_proxy.router import cmd_proxy
@@ -66,6 +67,8 @@ async def populate_cache_from_iot_hub_query_wrapper():
 async def lifespan(app: FastAPI):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, run_migrations)
+
+    await sync_permissions_to_db()
 
     jwks_refresh_task = None
 
