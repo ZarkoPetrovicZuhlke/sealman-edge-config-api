@@ -31,10 +31,10 @@ from routers.auth.schemas import (
     TeamCreateRequest,
     TeamDetailsResponse,
     TeamListResponse,
-    TeamSummaryResponse,
     TeamUpdateRequest,
     UserListResponse,
     UserPermissions,
+    UserTeamAssignmentsResponse,
 )
 from routers.base_api_router import BaseAPIRouter
 
@@ -228,9 +228,39 @@ async def get_current_user(
 
     return CurrentUserResponse(
         id=user["id"],
+        preferred_username=user["preferred_username"],
         is_admin=user["is_admin"],
         is_new=user["is_new"],
     )
+
+
+@auth.get("/user/teams", response_model=UserTeamAssignmentsResponse)
+async def get_current_user_teams(
+    auth_context: dict = Depends(validate_jwt),
+    user_repo: UserRepository = Depends(get_repository(UserRepository)),
+):
+    user_id = auth_context.get("oid") or auth_context.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=403, detail="User identifier missing from token")
+
+    teams = await user_repo.get_user_team_assignments(user_id)
+    if teams is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return UserTeamAssignmentsResponse.model_validate({"user_id": user_id, "teams": teams})
+
+
+@auth.get("/users/{user_id}/teams", response_model=UserTeamAssignmentsResponse)
+async def get_user_teams(
+    user_id: str,
+    _ = Depends(ABACPermissionCheck(Platform.AUTHORIZATION_READ)),
+    user_repo: UserRepository = Depends(get_repository(UserRepository)),
+):
+    teams = await user_repo.get_user_team_assignments(user_id)
+    if teams is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return UserTeamAssignmentsResponse.model_validate({"user_id": user_id, "teams": teams})
 
 
 @auth.get("/permissions/platform", response_model=UserPermissions)

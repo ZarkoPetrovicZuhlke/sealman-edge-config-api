@@ -137,7 +137,34 @@ class ScopeListResponse(RootModel[List[ScopeResponse]]):
   pass
 
 
+class PermissionItem(BaseModel):
+  name: str
+  is_global: bool
+
+
+class RolePermissionsResponse(BaseModel):
+  name: str
+  permissions: List[PermissionItem] = []
+
+
+class TeamScopeResponse(BaseModel):
+  name: str
+  attr: Dict[str, Any]
+
+
+class UserTeamAssignmentResponse(BaseModel):
+  name: str
+  scope: TeamScopeResponse | None = None
+  roles: List[RolePermissionsResponse] = []
+
+
+class UserTeamAssignmentsResponse(BaseModel):
+  user_id: str
+  teams: List[UserTeamAssignmentResponse] = []
+
+
 class CurrentUserResponse(BaseModel):
   id: str
+  preferred_username: str
   is_admin: bool
   is_new: bool

@@ -192,3 +192,42 @@ class SQLAlchemyUserRepository(UserRepository):
                 for team in user.teams
             ],
         }
+
+    async def get_user_team_assignments(self, user_id: str) -> Optional[List[dict[str, Any]]]:
+        result = await self._session.execute(
+            select(User)
+            .options(
+                selectinload(User.teams)
+                .selectinload(Team.assigned_roles)
+                .selectinload(Role.allowed_actions),
+                selectinload(User.teams)
+                .selectinload(Team.scope),
+            )
+            .where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            return None
+        return [
+            {
+                "name": team.name,
+                "scope": {
+                    "name": team.scope.name,
+                    "attr": team.scope.attr,
+                } if team.scope else None,
+                "roles": [
+                    {
+                        "name": role.name,
+                        "permissions": [
+                            {
+                                "name": action.name,
+                                "is_global": bool(action.is_global),
+                            }
+                            for action in role.allowed_actions
+                        ],
+                    }
+                    for role in team.assigned_roles
+                ],
+            }
+            for team in user.teams
+        ]
